@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Asistencia Institucional</title>
+    
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        :root {
+            --bg-principal: #f0f2f5;
+            --azul-colegio: #1a365d;
+            --exito: #2e7d32;
+            --tardanza: #e65100;
+            --advertencia: #0284c7;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-principal);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            transition: background-color 0.5s ease;
+        }
+
+        header {
+            background-color: var(--azul-colegio);
+            color: white;
+            width: 100%;
+            padding: 15px 0;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            letter-spacing: 1px;
+        }
+
+        header p {
+            margin: 5px 0 0 0;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .contenedor-principal {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 25px;
+            width: 100%;
+            max-width: 600px;
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
+
+        #contenedor-camara {
+            width: 100%;
+            border: none !important;
+            background: white;
+            padding: 15px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            box-sizing: border-box;
+        }
+
+        /* Estilizar botones internos de la librería para que se vean pro */
+        button {
+            background-color: var(--azul-colegio) !important;
+            color: white !important;
+            border: none !important;
+            padding: 10px 20px !important;
+            font-size: 0.9rem !important;
+            border-radius: 8px !important;
+            cursor: pointer !important;
+            transition: background 0.3s !important;
+        }
+        button:hover {
+            background-color: #2c5282 !important;
+        }
+
+        #resultado {
+            width: 100%;
+            padding: 20px;
+            border-radius: 16px;
+            background: white;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            text-align: center;
+            box-sizing: border-box;
+            display: none;
+            animation: deslizar 0.4s ease-out;
+        }
+
+        .mensaje-espera {
+            color: #666;
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+
+        .alumno-nombre {
+            font-size: 1.6rem;
+            font-weight: bold;
+            margin: 10px 0;
+            color: #111;
+        }
+
+        .alumno-detalles {
+            font-size: 1.1rem;
+            color: #555;
+        }
+
+        @keyframes deslizar {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>SISTEMA DE ASISTENCIA DIGITAL</h1>
+        <p>Muestre su código QR reglamentario frente a la cámara</p>
+    </header>
+
+    <div class="contenedor-principal">
+        <div id="contenedor-camara"></div>
+
+        <div id="resultado"></div>
+    </div>
+
+    <script>
+        let escaneando = false;
+        
+        // REEMPLAZA ESTA URL CON LA QUE TE DIO GOOGLE APPS SCRIPT
+        const urlGoogleSheets = "https://script.google.com/macros/s/AKfycbxIRc10hEWQJQIiSMags-uP2BX-d8HncnI9HqsdHWZaC9QtPiFsR9M7w82_F6LRiwVAZA/exec";
+
+        // Función elegante de asistencia por voz nativa
+        function hablar(texto) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel(); // Detiene cualquier audio previo
+                const saludo = new SpeechSynthesisUtterance(texto);
+                saludo.lang = 'es-ES';
+                saludo.rate = 1.1; // Velocidad ligeramente rápida para fluidez
+                window.speechSynthesis.speak(saludo);
+            }
+        }
+
+        function cuandoLeaCodigo(textoEscaneado) {
+            if (escaneando) return;
+            escaneando = true;
+
+            const cuadroResultados = document.getElementById('resultado');
+            const cuerpo = document.body;
+
+            // Estado de carga elegante
+            cuadroResultados.style.display = "block";
+            cuadroResultados.innerHTML = "<div class='mensaje-espera'>🔍 Verificando credenciales...</div>";
+            cuerpo.style.backgroundColor = "#e5e7eb";
+
+            fetch(urlGoogleSheets, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ codigo: textoEscaneado })
+            })
+            .then(res => res.json())
+            .then(datos => {
+                if (datos.status === "encontrado") {
+                    if (datos.estado === "Puntual") {
+                        cuerpo.style.backgroundColor = "#d1fae5"; // Fondo verde claro
+                        cuadroResultados.innerHTML = `
+                            <div style="color: var(--exito); font-weight: bold; font-size: 1.2rem;">✔ INGRESO PUNTUAL</div>
+                            <div class="alumno-nombre">${datos.nombre}</div>
+                            <div class="alumno-detalles">${datos.grado} - ${datos.seccion}</div>
+                        `;
+                        hablar("Ingreso verificado. Bienvenido " + datos.nombre);
+                    } else {
+                        cuerpo.style.backgroundColor = "#ffedd5"; // Fondo naranja claro
+                        cuadroResultados.innerHTML = `
+                            <div style="color: var(--tardanza); font-weight: bold; font-size: 1.2rem;">⏰ TARDANZA REGISTRADA</div>
+                            <div class="alumno-nombre">${datos.nombre}</div>
+                            <div class="alumno-detalles">${datos.grado} - ${datos.seccion}</div>
+                        `;
+                        hablar("Tardanza registrada. " + datos.nombre);
+                    }
+                } 
+                else if (datos.status === "ya_marcado") {
+                    cuerpo.style.backgroundColor = "#e0f2fe"; // Fondo azul claro
+                    cuadroResultados.innerHTML = `
+                        <div style="color: var(--advertencia); font-weight: bold; font-size: 1.2rem;">🛈 ACCIÓN DUPLICADA</div>
+                        <div class="alumno-nombre">${datos.nombre}</div>
+                        <div class="alumno-detalles" style="margin-top: 5px;">Ya registraste tu entrada hoy a las ${datos.hora}</div>
+                    `;
+                    hablar("Ya registraste tu entrada, " + datos.nombre);
+                } 
+                else if (datos.status === "no_encontrado") {
+                    cuerpo.style.backgroundColor = "#fee2e2"; // Fondo rojo claro
+                    cuadroResultados.innerHTML = `
+                        <div style="color: #b91c1c; font-weight: bold; font-size: 1.2rem;">❌ CÓDIGO NO REGISTRADO</div>
+                        <div class="alumno-detalles" style="margin-top: 10px;">El código [${textoEscaneado}] no pertenece a ningún estudiante activo.</div>
+                    `;
+                    hablar("Código no reconocido");
+                }
+
+                // Espera 3.5 segundos para limpiar la pantalla y recibir al siguiente alumno
+                setTimeout(() => {
+                    cuerpo.style.backgroundColor = "var(--bg-principal)";
+                    cuadroResultados.style.display = "none";
+                    escaneando = false;
+                }, 3500);
+            })
+            .catch(error => {
+                console.error("Error:", error);
+                cuerpo.style.backgroundColor = "#fee2e2";
+                cuadroResultados.innerHTML = "<div style='color: #b91c1c;'>❌ Error de red o timeout del servidor.</div>";
+                hablar("Error de conexión");
+                setTimeout(() => {
+                    cuerpo.style.backgroundColor = "var(--bg-principal)";
+                    cuadroResultados.style.display = "none";
+                    escaneando = false;
+                }, 3500);
+            });
+        }
+
+        function cuandoHayaError(error) {}
+
+        // Inicializar el lector de QR con un cuadro de enfoque óptimo
+        let html5QrcodeScanner = new Html5QrcodeScanner(
+            "contenedor-camara", 
+            { fps: 15, qrbox: {width: 260, height: 260} }, 
+            false
+        );
+        html5QrcodeScanner.render(cuandoLeaCodigo, cuandoHayaError);
+    </script>
+</body>
+</html>
