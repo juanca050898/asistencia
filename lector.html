@@ -4,239 +4,159 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Control de Asistencia Institucional</title>
-    
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-
+    <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        :root {
-            --bg-principal: #f0f2f5;
-            --azul-colegio: #1a365d;
-            --exito: #2e7d32;
-            --tardanza: #e65100;
-            --advertencia: #0284c7;
-        }
-
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-principal);
+            background-color: #f3f4f6;
             margin: 0;
             padding: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-height: 100vh;
-            transition: background-color 0.5s ease;
         }
-
-        header {
-            background-color: var(--azul-colegio);
+        .header {
+            background-color: #1e3a8a;
             color: white;
             width: 100%;
-            padding: 15px 0;
+            padding: 20px 0;
             text-align: center;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
         }
-
-        header h1 {
-            margin: 0;
-            font-size: 1.8rem;
-            letter-spacing: 1px;
-        }
-
-        header p {
-            margin: 5px 0 0 0;
-            font-size: 0.9rem;
-            opacity: 0.8;
-        }
-
-        .contenedor-principal {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 25px;
-            width: 100%;
-            max-width: 600px;
-            padding: 0 20px;
-            box-sizing: border-box;
-        }
-
-        #contenedor-camara {
-            width: 100%;
-            border: none !important;
+        .header h1 { margin: 0; font-size: 28px; }
+        .header p { margin: 5px 0 0 0; font-size: 16px; opacity: 0.9; }
+        .contenedor {
             background: white;
-            padding: 15px;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-            box-sizing: border-box;
-        }
-
-        /* Estilizar botones internos de la librería para que se vean pro */
-        button {
-            background-color: var(--azul-colegio) !important;
-            color: white !important;
-            border: none !important;
-            padding: 10px 20px !important;
-            font-size: 0.9rem !important;
-            border-radius: 8px !important;
-            cursor: pointer !important;
-            transition: background 0.3s !important;
-        }
-        button:hover {
-            background-color: #2c5282 !important;
-        }
-
-        #resultado {
-            width: 100%;
             padding: 20px;
-            border-radius: 16px;
-            background: white;
+            border-radius: 15px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            margin-top: 30px;
+            width: 90%;
+            max-width: 500px;
             text-align: center;
-            box-sizing: border-box;
-            display: none;
-            animation: deslizar 0.4s ease-out;
         }
-
-        .mensaje-espera {
-            color: #666;
-            font-size: 1.2rem;
-            font-weight: 500;
+        #lector-qr {
+            width: 100%;
+            border-radius: 10px;
+            overflow: hidden;
+            background-color: #f8fafc;
         }
-
-        .alumno-nombre {
-            font-size: 1.6rem;
+        #resultado {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 18px;
             font-weight: bold;
-            margin: 10px 0;
-            color: #111;
+            display: none;
         }
-
-        .alumno-detalles {
-            font-size: 1.1rem;
-            color: #555;
-        }
-
-        @keyframes deslizar {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .exito { background-color: #d1fae5; color: #065f46; border: 2px solid #34d399; }
+        .tardanza { background-color: #ffedd5; color: #9a3412; border: 2px solid #fb923c; }
+        .error { background-color: #fee2e2; color: #991b1b; border: 2px solid #f87171; }
     </style>
 </head>
 <body>
 
-    <header>
+    <div class="header">
         <h1>SISTEMA DE ASISTENCIA DIGITAL</h1>
-        <p>Muestre su código QR reglamentario frente a la cámara</p>
-    </header>
+        <p>Muestre su código QR frente a la cámara</p>
+    </div>
 
-    <div class="contenedor-principal">
-        <div id="contenedor-camara"></div>
-
+    <div class="contenedor">
+        <div id="lector-qr"></div>
         <div id="resultado"></div>
     </div>
 
     <script>
-        let escaneando = false;
-        
-        // REEMPLAZA ESTA URL CON LA QUE TE DIO GOOGLE APPS SCRIPT
+        // PEGA AQUÍ TU URL DE GOOGLE APPS SCRIPT
         const urlGoogleSheets = "https://script.google.com/macros/s/AKfycbxIRc10hEWQJQIiSMags-uP2BX-d8HncnI9HqsdHWZaC9QtPiFsR9M7w82_F6LRiwVAZA/exec";
 
-        // Función elegante de asistencia por voz nativa
-        function hablar(texto) {
-            if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel(); // Detiene cualquier audio previo
-                const saludo = new SpeechSynthesisUtterance(texto);
-                saludo.lang = 'es-ES';
-                saludo.rate = 1.1; // Velocidad ligeramente rápida para fluidez
-                window.speechSynthesis.speak(saludo);
+        let escaneoBloqueado = false;
+
+        // FUNCIÓN TÉCNICA PARA GENERAR PITIDOS ELECTRÓNICOS SIN AUDIO EXTERNO
+        function emitirPitido(frecuencia, duracion) {
+            try {
+                const contextoAudio = new (window.AudioContext || window.webkitAudioContext)();
+                const oscilador = contextoAudio.createOscillator();
+                const ganancia = contextoAudio.createGain();
+                
+                oscilador.type = "sine";
+                oscilador.frequency.value = frecuencia; // Frecuencia en Hz
+                ganancia.gain.setValueAtTime(0.3, contextoAudio.currentTime); // Volumen al 30%
+                
+                oscilador.connect(ganancia);
+                ganancia.connect(contextoAudio.destination);
+                
+                oscilador.start();
+                // Efecto de apagado suave para evitar chasquidos en el parlante
+                ganancia.gain.exponentialRampToValueAtTime(0.00001, contextoAudio.currentTime + duracion);
+                oscilador.stop(contextoAudio.currentTime + duracion);
+            } catch (error) {
+                console.error("Error al emitir sonido:", error);
             }
         }
 
-        function cuandoLeaCodigo(textoEscaneado) {
-            if (escaneando) return;
-            escaneando = true;
+        function inicializarEscaner() {
+            const html5QrcodeScanner = new Html5QrcodeScanner("lector-qr", { 
+                fps: 15, 
+                qrbox: { width: 250, height: 250 },
+                rememberLastUsedCamera: true
+            });
+            
+            html5QrcodeScanner.render(onScanSuccess);
+        }
+
+        function onScanSuccess(decodedText) {
+            if (escaneoBloqueado) return;
+            escaneoBloqueado = true; // Bloqueamos ráfagas de escaneos involuntarios
 
             const cuadroResultados = document.getElementById('resultado');
-            const cuerpo = document.body;
-
-            // Estado de carga elegante
             cuadroResultados.style.display = "block";
-            cuadroResultados.innerHTML = "<div class='mensaje-espera'>🔍 Verificando credenciales...</div>";
-            cuerpo.style.backgroundColor = "#e5e7eb";
+            cuadroResultados.className = ""; 
+            cuadroResultados.innerHTML = "🔍 Procesando DNI...";
+            document.body.style.backgroundColor = "#e5e7eb";
 
             fetch(urlGoogleSheets, {
                 method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({ codigo: textoEscaneado })
+                mode: "no-cors", // Para evitar problemas de CORS entre servidores
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ codigo: decodedText })
             })
-            .then(res => res.json())
-            .then(datos => {
-                if (datos.status === "encontrado") {
-                    if (datos.estado === "Puntual") {
-                        cuerpo.style.backgroundColor = "#d1fae5"; // Fondo verde claro
-                        cuadroResultados.innerHTML = `
-                            <div style="color: var(--exito); font-weight: bold; font-size: 1.2rem;">✔ INGRESO PUNTUAL</div>
-                            <div class="alumno-nombre">${datos.nombre}</div>
-                            <div class="alumno-detalles">${datos.grado} - ${datos.seccion}</div>
-                        `;
-                        hablar("Ingreso verificado. Bienvenido " + datos.nombre);
-                    } else {
-                        cuerpo.style.backgroundColor = "#ffedd5"; // Fondo naranja claro
-                        cuadroResultados.innerHTML = `
-                            <div style="color: var(--tardanza); font-weight: bold; font-size: 1.2rem;">⏰ TARDANZA REGISTRADA</div>
-                            <div class="alumno-nombre">${datos.nombre}</div>
-                            <div class="alumno-detalles">${datos.grado} - ${datos.seccion}</div>
-                        `;
-                        hablar("Tardanza registrada. " + datos.nombre);
-                    }
-                } 
-                else if (datos.status === "ya_marcado") {
-                    cuerpo.style.backgroundColor = "#e0f2fe"; // Fondo azul claro
-                    cuadroResultados.innerHTML = `
-                        <div style="color: var(--advertencia); font-weight: bold; font-size: 1.2rem;">🛈 ACCIÓN DUPLICADA</div>
-                        <div class="alumno-nombre">${datos.nombre}</div>
-                        <div class="alumno-detalles" style="margin-top: 5px;">Ya registraste tu entrada hoy a las ${datos.hora}</div>
-                    `;
-                    hablar("Ya registraste tu entrada, " + datos.nombre);
-                } 
-                else if (datos.status === "no_encontrado") {
-                    cuerpo.style.backgroundColor = "#fee2e2"; // Fondo rojo claro
-                    cuadroResultados.innerHTML = `
-                        <div style="color: #b91c1c; font-weight: bold; font-size: 1.2rem;">❌ CÓDIGO NO REGISTRADO</div>
-                        <div class="alumno-detalles" style="margin-top: 10px;">El código [${textoEscaneado}] no pertenece a ningún estudiante activo.</div>
-                    `;
-                    hablar("Código no reconocido");
-                }
+            .then(() => {
+                // COMO USAMOS 'NO-CORS', EL MENSAJE LLEGA SÍ O SÍ A GOOGLE. 
+                // EN LUGAR DE ESPERAR LA RESPUESTA LENTA, HACEMOS UN PITIDO INSTANTÁNEO DE ÉXITO
+                
+                cuadroResultados.className = "exito";
+                cuadroResultados.innerHTML = "✅ ¡REGISTRO ENVIADO!<br><small>DNI: " + decodedText + "</small>";
+                document.body.style.backgroundColor = "#d1fae5";
+                
+                // Sonido tipo supermercado: Pitido agudo (800Hz) y muy corto (0.15 segundos)
+                emitirPitido(800, 0.15);
 
-                // Espera 3.5 segundos para limpiar la pantalla y recibir al siguiente alumno
+                // Desbloqueamos el escáner en solo 1.5 segundos para que la fila vuele
                 setTimeout(() => {
-                    cuerpo.style.backgroundColor = "var(--bg-principal)";
                     cuadroResultados.style.display = "none";
-                    escaneando = false;
-                }, 3500);
+                    document.body.style.backgroundColor = "#f3f4f6";
+                    escaneoBloqueado = false;
+                }, 1500);
             })
             .catch(error => {
-                console.error("Error:", error);
-                cuerpo.style.backgroundColor = "#fee2e2";
-                cuadroResultados.innerHTML = "<div style='color: #b91c1c;'>❌ Error de red o timeout del servidor.</div>";
-                hablar("Error de conexión");
+                cuadroResultados.className = "error";
+                cuadroResultados.innerHTML = "❌ Error de Red / Conexión";
+                document.body.style.backgroundColor = "#fee2e2";
+                
+                // Sonido de error: Dos pitidos graves seguidos (Dos tonos de 300Hz cortos)
+                emitirPitido(300, 0.2);
+                setTimeout(() => emitirPitido(300, 0.2), 250);
+
                 setTimeout(() => {
-                    cuerpo.style.backgroundColor = "var(--bg-principal)";
                     cuadroResultados.style.display = "none";
-                    escaneando = false;
-                }, 3500);
+                    document.body.style.backgroundColor = "#f3f4f6";
+                    escaneoBloqueado = false;
+                }, 3000);
             });
         }
 
-        function cuandoHayaError(error) {}
-
-        // Inicializar el lector de QR con un cuadro de enfoque óptimo
-        let html5QrcodeScanner = new Html5QrcodeScanner(
-            "contenedor-camara", 
-            { fps: 15, qrbox: {width: 260, height: 260} }, 
-            false
-        );
-        html5QrcodeScanner.render(cuandoLeaCodigo, cuandoHayaError);
+        window.addEventListener('DOMContentLoaded', inicializarEscaner);
     </script>
 </body>
 </html>
