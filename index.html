@@ -107,20 +107,32 @@
 
         function onScanSuccess(decodedText) {
             if (escaneoBloqueado) return;
-            escaneoBloqueado = true; // Bloqueamos ráfagas de escaneos involuntarios
+            escaneoBloqueado = true; // Bloqueo momentáneo para procesar el pitido
 
             const cuadroResultados = document.getElementById('resultado');
             cuadroResultados.style.display = "block";
-            cuadroResultados.className = ""; 
-            cuadroResultados.innerHTML = "🔍 Procesando DNI...";
-            document.body.style.backgroundColor = "#e5e7eb";
+            cuadroResultados.className = "exito"; 
+            cuadroResultados.innerHTML = "✅ ¡REGISTRO ENVIADO!<br><small>DNI: " + decodedText + "</small>";
+            document.body.style.backgroundColor = "#d1fae5";
 
+            // 1. Mandamos los datos a Google en segundo plano (vuela)
             fetch(urlGoogleSheets, {
                 method: "POST",
-                mode: "no-cors", // Para evitar problemas de CORS entre servidores
+                mode: "no-cors",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ codigo: decodedText })
-            })
+            }).catch(error => console.log("Error de red de respaldo:", error));
+
+            // 2. Emitimos el pitido de supermercado al instante
+            emitirPitido(800, 0.12);
+
+            // 3. EL TRUCO: En solo 800 milisegundos limpiamos la pantalla y SOLTAMOS el escáner
+            setTimeout(() => {
+                cuadroResultados.style.display = "none";
+                document.body.style.backgroundColor = "#f3f4f6";
+                escaneoBloqueado = false; // ¡Cámara liberada para el siguiente alumno!
+            }, 800); 
+        }
             .then(() => {
                 // COMO USAMOS 'NO-CORS', EL MENSAJE LLEGA SÍ O SÍ A GOOGLE. 
                 // EN LUGAR DE ESPERAR LA RESPUESTA LENTA, HACEMOS UN PITIDO INSTANTÁNEO DE ÉXITO
