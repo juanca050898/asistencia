@@ -50,6 +50,7 @@
             display: none;
         }
         .exito { background-color: #d1fae5; color: #065f46; border: 2px solid #34d399; }
+        .advertencia { background-color: #fef3c7; color: #92400e; border: 2px solid #fbbf24; }
         .error { background-color: #fee2e2; color: #991b1b; border: 2px solid #f87171; }
     </style>
 </head>
@@ -66,66 +67,87 @@
     </div>
 
     <script>
-        // TU URL DE GOOGLE APPS SCRIPT
         const urlGoogleSheets = "https://script.google.com/macros/s/AKfycbxIRc10hEWQJQIiSMags-uP2BX-d8HncnI9HqsdHWZaC9QtPiFsR9M7w82_F6LRiwVAZA/exec";
 
         let escaneoBloqueado = false;
+        
+        // LISTA LOCAL: Aquí la tablet guardará los DNI procesados durante la mañana
+        let alumnosProcesadosHoy = new Set();
 
-        // FUNCIÓN PARA GENERAR PITIDOS ELECTRÓNICOS
+        // Generador de sonidos limpios
         function emitirPitido(frecuencia, duracion) {
             try {
                 const contextoAudio = new (window.AudioContext || window.webkitAudioContext)();
                 const oscilador = contextoAudio.createOscillator();
                 const ganancia = contextoAudio.createGain();
-                
                 oscilador.type = "sine";
                 oscilador.frequency.value = frecuencia; 
                 ganancia.gain.setValueAtTime(0.3, contextoAudio.currentTime); 
-                
                 oscilador.connect(ganancia);
                 ganancia.connect(contextoAudio.destination);
-                
                 oscilador.start();
                 ganancia.gain.exponentialRampToValueAtTime(0.00001, contextoAudio.currentTime + duracion);
                 oscilador.stop(contextoAudio.currentTime + duracion);
-            } catch (error) {
-                console.error("Error al emitir sonido:", error);
-            }
+            } catch (e) { console.log(e); }
         }
 
         function inicializarEscaner() {
             const html5QrcodeScanner = new Html5QrcodeScanner("lector-qr", { 
-                fps: 15, 
+                fps: 20, // Más cuadros por segundo para lectura ultra veloz
                 qrbox: { width: 250, height: 250 },
                 rememberLastUsedCamera: true
             });
-            
             html5QrcodeScanner.render(onScanSuccess);
         }
 
-        // FUNCIÓN DE ESCANEO CORREGIDA Y CIERRES PERFECTOS
         function onScanSuccess(decodedText) {
             if (escaneoBloqueado) return;
             escaneoBloqueado = true; 
 
+            const DNI = decodedText.trim();
             const cuadroResultados = document.getElementById('resultado');
             cuadroResultados.style.display = "block";
+
+            // 1. CONTROL DE DUPLICADOS EN TIEMPO REAL (MEMORIA LOCAL)
+            if (alumnosProcesadosHoy.has(DNI)) {
+                // Alumno tramposo detectado localmente de inmediato
+                cuadroResultados.className = "advertencia";
+                cuadroResultados.innerHTML = "⚠️ ASISTENCIA YA REGISTRADA<br><small>El DNI " + DNI + " ya ingresó hoy.</small>";
+                document.body.style.backgroundColor = "#fef3c7";
+
+                // Pitido doble grave de advertencia (Bup-Bup)
+                emitirPitido(350, 0.15);
+                setTimeout(() => emitirPitido(350, 0.15), 200);
+
+                // Liberamos la cámara rápido (en 1 segundo) para no trabar la fila
+                setTimeout(() => {
+                    cuadroResultados.style.display = "none";
+                    document.body.style.backgroundColor = "#f3f4f6";
+                    escaneoBloqueado = false;
+                }, 1000);
+                return; // Corta el proceso aquí, no consume internet ni envía nada a Google
+            }
+
+            // 2. CASO: ALUMNO NUEVO (INGRESO CORRECTO)
+            // Lo guardamos de inmediato en la memoria de la tablet
+            alumnosProcesadosHoy.add(DNI);
+
             cuadroResultados.className = "exito"; 
-            cuadroResultados.innerHTML = "✅ ¡REGISTRO ENVIADO!<br><small>DNI: " + decodedText + "</small>";
+            cuadroResultados.innerHTML = "✅ ¡INGRESO REGISTRADO!<br><small>DNI: " + DNI + "</small>";
             document.body.style.backgroundColor = "#d1fae5";
 
-            // Enviar datos en segundo plano
+            // Manda el dato a Google Sheets de fondo (no frena la pantalla)
             fetch(urlGoogleSheets, {
                 method: "POST",
                 mode: "no-cors",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ codigo: decodedText })
-            }).catch(error => console.log("Error de red:", error));
+                body: JSON.stringify({ codigo: DNI })
+            }).catch(error => console.log("Envío de respaldo:", error));
 
-            // Pitido instantáneo estilo supermercado
+            // Pitido agudo instantáneo tipo supermercado (Bip!)
             emitirPitido(800, 0.12);
 
-            // Liberar la cámara en 800 milisegundos para modo ráfaga
+            // En solo 800 milisegundos limpia la pantalla y suelta la cámara
             setTimeout(() => {
                 cuadroResultados.style.display = "none";
                 document.body.style.backgroundColor = "#f3f4f6";
@@ -133,7 +155,6 @@
             }, 800);
         }
 
-        // Forzar arranque limpio al cargar la página
         window.onload = inicializarEscaner;
     </script>
 </body>
